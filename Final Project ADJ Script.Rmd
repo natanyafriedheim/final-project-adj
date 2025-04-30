@@ -1,0 +1,103 @@
+---
+title: "Final Project for ADJ"
+output: 
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(googlesheets4)
+library(janitor)
+```
+```{r}
+read_csv("Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
+list.files()
+list.files("Data")
+read_csv("Data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
+original_data <- read_csv("Data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
+```
+There are 428,097 rows in the data and 77 columns. I can handle that many rows, but I want to cut down on the columns to make analyzing the data set more manageable. 
+
+```{r}
+colnames(original_data)
+```
+Questions about the rows: 
+What rows do I actually care about? 
+Is estimated value of work (row 12) always the same as accepted value (row 1) ?
+
+Rows I care about: 
+6) contractor - who's getting permits? 
+7) contractorelectrical
+8) contractorplumbing
+19) issuedate - are permits actually being issued? 
+23) occupancygroupassessed - this tells me if it's an office building, a single-family home, an apartment, etc. 
+27) planmaker - this MIGHT be the person who actually submits the permit, or it could be the architect
+30) proposeduse - many n/a but things like "school" would be interesting to look at
+35) statusdescription - tells me if the permit is closed, the job has been canceled, or in progress. Note "sfd" is sometimes used, and "single family dwelling" at other times. Also check for trends in solar installations
+36) TMK - that's the Tax Key Map, run by the city government. I can see exactly where the property is and who owns it. 
+40) bpfeescollected - does this mean the permitting fees collected by the state? 
+41) ownershipassessed - tells me if the property or land is private or public
+42) structurecode - tells me if office building, apartment, museum, etc. 
+43) date created
+44) date completed
+45) commercialresidential
+47) ohana - that's what people in Hawaii call accessory dwelling units  
+48) solar - 
+52) bofeecalculation - how is this different than 40) bofeescollected? 
+53) cityproject
+64) stateproject
+67) tmklookup - how is this different than TMK? 
+76) electric vehicle charger - Check trends
+77) address - last five characters are the zip code. I can create a new column of Zip code. 
+
+Notes: There are columns for "jobaddress" and "joblocation" which often to usually line up with "address" except that many do not have zip codes at the end. 
+
+I would like to make a new data set with only the rows I care about. I want to clean the date columns (43 and 44) so the dates appear as YYYY-MM-DD 
+```{r}
+original_data %>% 
+  mutate(new_createddate = mdy(createddate)) %>% 
+  select(new_createddate, createddate)
+#this worked quite nicely. Let's try to also do the completed date. 
+
+original_data %>% 
+  mutate(new_createddate = mdy(createddate), new_completeddate = mdy(completeddate)) %>% 
+  select(new_createddate, createddate, new_completeddate, completeddate)
+#all of the completed dates come out at n/a. It's unclear if that's because there actually is only n/a -- I only see the first 10,000 rows -- or because something is going wrong with my code. I'll try with only completed date, then try to filter for n/as
+
+original_data %>% 
+  mutate(new_completeddate = mdy(completeddate)) %>% 
+  select(new_completeddate, completeddate) %>% 
+  filter(!is.na(completeddate)) %>% 
+  arrange(desc(completeddate))
+#ok, so there are some completeddates in 2024. That means I do want that data. For how many rows is the completeddate n.a? 
+
+original_data %>% 
+  filter(is.na(completeddate)) %>%
+           count()
+#there are 37,431 rows for which the completeddate is na
+```
+Again, I would like to make a new data set with only the rows I care about. I want to clean the date columns (43 and 44) so the dates appear as YYYY-MM-DD 
+
+```{r}
+original_data %>% 
+  mutate(new_createddate = mdy(createddate), new_completeddate = mdy(completeddate)) %>% 
+  select(new_createddate, createddate, new_completeddate, completeddate)
+
+cleaned_dates_data <- original_data %>% 
+   mutate(new_createddate = mdy(createddate), new_completeddate = mdy(completeddate)) %>% 
+  select(new_createddate, createddate, new_completeddate, completeddate)
+#oops -- I didn't want to select only those rows. 
+
+cleaned_dates_data <- original_data %>% 
+   mutate(new_createddate = mdy(createddate), new_completeddate = mdy(completeddate))
+
+cleaned_dates_data <- original_data %>% 
+   mutate(new_createddate = mdy(createddate), .after = createdate, new_completeddate = mdy(completeddate), .after = completeddate)
+
+cleaned_dates_data <- original_data %>% 
+   mutate(new_createddate = mdy(createddate), .after = createddate) %>% 
+  mutate(new_completeddate = mdy(completeddate), .after = completeddate) %>% 
+  mutate(new_issuedate = mdy(issuedate), .after = issuedate)
+
+```
+
