@@ -9,28 +9,29 @@ library(readxl)
 library(googlesheets4)
 library(janitor)
 ```
+Loading data from the Honolulu open portal website. https://data.honolulu.gov/business/Building-Permits-January-1-2005-through-March-31-2/4vab-c87q/about_data
+
 ```{r}
 read_csv("Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
 list.files()
 list.files("Data")
+
 read_csv("Data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
 original_data <- read_csv("Data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
 ```
-There are 428,097 rows in the data and 77 columns. I can handle that many rows, but I want to cut down on the columns to make analyzing the data set more manageable. 
+The data is from data.Honolulu.gov. A description from the website reads: "Building Permits - January 1, 2005 through March 31, 2025. This file is a static view of Building Permit data. This snapshot of data is an extract from the source database as of the moment of the snapshot's creation. A snapshot does not reflect changes that occur in the live data source." 
+
+There are 428,097 rows in the data and 77 columns. I will cut down on the columns to make analyzing the data set more manageable. What columns are included?
 
 ```{r}
 colnames(original_data)
 ```
-Questions about the rows: 
-What rows do I actually care about? 
-Is estimated value of work (row 12) always the same as accepted value (row 1) ?
-
-Rows I care about: 
+What variables do I actually care about? 
 6) contractor - who's getting permits? 
 7) contractorelectrical
 8) contractorplumbing
 19) issuedate - are permits actually being issued? 
-23) occupancygroupassessed - this tells me if it's an office building, a single-family home, an apartment, etc. 
+23) occupancygroupassessed - this tells me if it's an office building, a single-family home, an apartment, etc.
 27) planmaker - this MIGHT be the person who actually submits the permit, or it could be the architect
 30) proposeduse - many n/a but things like "school" would be interesting to look at
 35) statusdescription - tells me if the permit is closed, the job has been canceled, or in progress. Note "sfd" is sometimes used, and "single family dwelling" at other times. Also check for trends in solar installations
@@ -69,7 +70,7 @@ original_data %>%
   select(new_completeddate, completeddate) %>% 
   filter(!is.na(completeddate)) %>% 
   arrange(desc(completeddate))
-#ok, so there are some completeddates in 2024. That means I do want that data. For how many rows is the completeddate n.a? 
+#There are some completeddates in 2024. That means I do want that data. For how many rows is the completeddate n.a? 
 
 original_data %>% 
   filter(is.na(completeddate)) %>%
@@ -86,7 +87,7 @@ original_data %>%
 cleaned_dates_data <- original_data %>% 
    mutate(new_createddate = mdy(createddate), new_completeddate = mdy(completeddate)) %>% 
   select(new_createddate, createddate, new_completeddate, completeddate)
-#oops -- I didn't want to select only those rows. 
+#I didn't want to select only those rows. 
 
 cleaned_dates_data <- original_data %>% 
    mutate(new_createddate = mdy(createddate), new_completeddate = mdy(completeddate))
@@ -95,9 +96,181 @@ cleaned_dates_data <- original_data %>%
    mutate(new_createddate = mdy(createddate), .after = createdate, new_completeddate = mdy(completeddate), .after = completeddate)
 
 cleaned_dates_data <- original_data %>% 
-   mutate(new_createddate = mdy(createddate), .after = createddate) %>% 
-  mutate(new_completeddate = mdy(completeddate), .after = completeddate) %>% 
-  mutate(new_issuedate = mdy(issuedate), .after = issuedate)
+   mutate(created_date = mdy(createddate), .after = createddate) %>% 
+  mutate(completed_date = mdy(completeddate), .after = completeddate) %>% 
+  mutate(issue_date = mdy(issuedate), .after = issuedate)
 
+cleaned_dates_data %>% 
+  select(buildingpermitno, contractor, contractorelectrical, contractorplumbing, issue_date, occupancygroupassessed, planmaker, proposeduse, statusdescription, tmk, bpfeescollected, ownershipassessed, structurecode, created_date, completed_date, commercialresidential, ohana, solar, bpfeecalculation, cityproject, stateproject, tmklookup, electricvehiclecharger, address)
+
+ cleaned_data <- cleaned_dates_data %>% 
+  select(buildingpermitno, contractor, contractorelectrical, contractorplumbing, issue_date, occupancygroupassessed, planmaker, proposeduse, statusdescription, tmk, bpfeescollected, ownershipassessed, structurecode, created_date, completed_date, commercialresidential, ohana, solar, bpfeecalculation, cityproject, stateproject, tmklookup, electricvehiclecharger, address, acceptedvalue)
 ```
 
+Above, I revised the cleaned_dates_data to create a data set with only the columns (variables) I care about. This will help data analysis because it will unclutter the data. I won't have to skim through variables I don't particularly care about. 
+
+I'm interest in data that tells me: contractors in charge of the projects, dates, location(s), cost of project, cost of fees, type of property, type, electricvehiclecharger of renovation. I will clump each column into these categories. I am going to get rid of these columns: ohana and solar. I can add those back in but right now it's too much information and I don't particularly care. I am also excluding tmklookup. I am adding in: acceptedvalue
+
+Other: buildingpermitno
+Status of permit issuance: statusdescription
+Contractors: planmaker, contractor, contractorelectrical, contractorplumbing
+Dates: created_date, issue_date, completed_date,
+Location: address, tmk
+Cost of project: acceptedvalue, estimatedvalueofwork
+Cost of fees: bpfeecalculation, bpfeescollected
+Type of property: commercialresidential, ownershipassessed, occupancygroupassessed, proposeduse, structurecode, cityproject, stateproject
+
+```{r}
+#I am further narrowing down the data I want, and the order I want to see it in. 
+cleaned_data <- cleaned_dates_data %>% 
+  select(buildingpermitno, statusdescription, planmaker, contractor, contractorelectrical, contractorplumbing, created_date, issue_date, completed_date, address, tmk, estimatedvalueofwork, acceptedvalue, bpfeecalculation, bpfeescollected, commercialresidential, ownershipassessed, occupancygroupassessed, proposeduse, structurecode, cityproject, stateproject)
+
+#now I will rename columns so I can reach them more easily.
+cleaned_data %>% 
+  rename(building_permit_no = buildingpermitno, status = statusdescription, plan_maker = planmaker, electrical = contractorelectrical, plumbing = contractorplumbing, accepted_value = acceptedvalue, bp_fee_calculation = bpfeecalculation, bp_fee_collected = bpfeescollected, commpercial_residential = commercialresidential, ownership = ownershipassessed, occupancy_group = occupancygroupassessed, proposed_use = proposeduse, structure_code = structurecode, city = cityproject, state = stateproject)
+         
+cleaned_data <- cleaned_data %>% 
+    rename(building_permit_no = buildingpermitno, status = statusdescription, plan_maker = planmaker, electrical = contractorelectrical, plumbing = contractorplumbing, accepted_value = acceptedvalue, bp_fee_calculation = bpfeecalculation, bp_fee_collected = bpfeescollected, commpercial_residential = commercialresidential, ownership = ownershipassessed, occupancy_group = occupancygroupassessed, proposed_use = proposeduse, structure_code = structurecode, city = cityproject, state = stateproject, est_value_of_work = estimatedvalueofwork)
+
+#I need to add estimatedvalueofwork
+```
+
+My data is now cleaned and I am ready to analyze it. Before I move on with my cleaned data, I want to answer some questions about these four rows in original_data: are "accessorydwellingunitadu" and "ohana" ever different? Are "solar" and "solarvpinstsallation" ever different? The rows either have Y in the cell, for "yes" or N for "no." Based on skimming the data, it seems like if a row has an N for accessorydwellingunitadu that row also has an N for ohana. likewise for solarvpinstallation and solar. I want to check that that is true 100% of the time. 
+
+Accessory dwelling units are small cottages people build in their backyard, for example, to add more living space on their property. In Hawaii, these are often called "ohana units." They're also called "granny flats."
+
+```{r}
+original_data %>% 
+  select(accessorydwellingunitadu, ohana) %>% 
+  filter(accessorydwellingunitadu != ohana)
+
+#There are 3,171 rows for which "accessorydwellingunitadu" and "ohana" do not align. 
+```
+ 
+```{r}
+original_data %>% 
+  select(solarvpinstallation, solar) %>% 
+  filter(solarvpinstallation != solar)
+#there are 83,171 rows for which solarvpinstallation does not match solar. 
+```
+
+The columns "solar" and "solarvpinstallation" and not redundant. The columns "accessorydwellingunitadu" and "ohana" appear to also not be redundant. A reporting question would be how the variables within these seemingly similar pairs differ. 
+
+The data description  says it contains data from January 1, 2005 to March 31, 2025. Is that true? 
+```{r}
+cleaned_data %>% 
+  count(created_date)
+
+cleaned_data %>% 
+  summarise(range(created_date))
+```
+This contains data from 1999 to 2025, not from 2005 to 2025. 
+
+How many rows does the data contain per year? First I'll create a new column with just the year. 
+
+```{r}
+cleaned_data %>% 
+  mutate(year = year(created_date), .after = created_date)
+
+cleaned_data <- cleaned_data %>% 
+    mutate(year = year(created_date), .after = created_date)
+```
+
+The I will count the number of rows per year
+```{r}
+cleaned_data %>% 
+  group_by(year) %>% 
+  count()
+
+#The number of permits issued in 1999 is just 364 -- hard to believe. The number rises to 1784 in 2000, then 2668 in 2001, then 4655 in 2002, 8345 in 2003, 13808 in 2003 and finally 18640 in 2005. I wonder if the data is incomplete for the years prior to 2005, seeing as the city's open-source data portal from whence I got the data say it is data from 2005 to 2025. 
+
+cleaned_data %>%
+  group_by(year) %>%
+  count() %>%
+  ggplot(aes(x = year, y = n)) +
+geom_col()
+```
+I do not trust that there is complete data prior to 2005, so I will remove all the data from years prior to 2005. 
+
+```{r}
+cleaned_data %>%
+  distinct(year) %>% 
+  arrange(desc(year))
+
+cleaned_data %>% 
+  filter(year > 2004)
+
+cleaned_data %>% 
+  filter(year > 2004) %>% 
+  distinct(year) %>% 
+  arrange(desc(year))
+
+cleaned_data <- cleaned_data %>% 
+  filter(year>2004)
+
+
+cleaned_data %>% 
+  summarise(range(created_date))
+```
+
+The new data set, cleaned_data, has 396,473 rows and 23 columns. It shows all permit applications filed from 2005 to March 31 2025 I am ready to summarize the data. I'm going to go through and answer basic questions about the data to get a feel for what I'm working with, then I will delve into more complicated analysis questions.
+
+How many plan makers are in the data? 
+
+```{r}
+cleaned_data %>% 
+  summarise(plan_maker = n_distinct(plan_maker))
+
+#There are just 65,987 "plan makers" for almost 400,000 permit applications filed for the Department of Planning and Permitting in Honolulu. Which plan makers appear most often? 
+
+cleaned_data %>%
+  distinct(plan_maker) 
+  
+cleaned_data %>%
+  group_by(plan_maker) %>% 
+  count() %>% 
+  arrange(desc(n))
+
+#Most plans have "NONE" for plan_maker or NA. How many of the rows have "NONE" or NA total, and what percent are they of the total? 
+
+cleaned_data %>%
+  group_by(plan_maker) %>% 
+  count() %>% 
+  arrange(desc(n))
+  
+```
+Moving forward, I would like to reverse engineer a data analysis done by Honolulu Civil Beat as a way to practice data analysis skills. The outlet got the same data, and did the following steps, which I will replicate: 
+-narrow data to 2012 to 2022
+- break up data into four categories for an apples-to-apples comparison of permit issuing times
+  1) New building with electrical, plumbing and solar work
+  2) Alternation and addition with electrical and plumbing work 
+  3) Alteration with electrical and plumbing work 
+  4) Alternation with electrical work
+- Narrow to applicants who have had 10 or more permits issued
+- calculate the difference between each permit application's "date created" with "date issued" 
+- 
+
+Following these steps, I'll create a new data set for 2023 to 2025 to see if trends have continued. 
+
+
+
+
+***as a rule of thumb, use `group_by()` and `summarise()` together, or `count()` if what you want to summarise is just number of rows**
+data_2 %>% 
+  group_by(ExtNatureDisplayName) %>% 
+  count() %>% 
+  arrange(desc(n))
+###LIZ: to tighten your code a bit:
+data_2 %>% 
+  count(ExtNatureDisplayName) %>% 
+  arrange(desc(n))
+
+Questions: 
+Check the number of days between the created date and issued date. Create a new column with the number of days it took between the created date and issued date, if there is a way in R to determine that (assuming R has some sort of built-in calendar)? 
+Median time for permitting residential and commerical projects? 
+What's the best day of the week to file a permit? 
+For every year, what's the median time it takes to issue a Honolulu permit? 
+Who gets the permits? 
+Is estimated value of work (row 12) always the same as accepted value (row 1) ?
+Which plumbing , electrical and general contractors are working on state and city projects most often? 
+How many electric vehicle chargers have been added to homes? Check the variable: electricvehiclecharger 
