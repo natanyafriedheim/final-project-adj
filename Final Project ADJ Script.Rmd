@@ -12,10 +12,6 @@ library(janitor)
 Loading data from the Honolulu open portal website. https://data.honolulu.gov/business/Building-Permits-January-1-2005-through-March-31-2/4vab-c87q/about_data
 
 ```{r}
-read_csv("Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
-list.files()
-list.files("Data")
-
 read_csv("Data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
 original_data <- read_csv("Data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
 ```
@@ -104,7 +100,7 @@ cleaned_dates_data %>%
   select(buildingpermitno, contractor, contractorelectrical, contractorplumbing, issue_date, occupancygroupassessed, planmaker, proposeduse, statusdescription, tmk, bpfeescollected, ownershipassessed, structurecode, created_date, completed_date, commercialresidential, ohana, solar, bpfeecalculation, cityproject, stateproject, tmklookup, electricvehiclecharger, address)
 
  cleaned_data <- cleaned_dates_data %>% 
-  select(buildingpermitno, contractor, contractorelectrical, contractorplumbing, issue_date, occupancygroupassessed, planmaker, proposeduse, statusdescription, tmk, bpfeescollected, ownershipassessed, structurecode, created_date, completed_date, commercialresidential, ohana, solar, bpfeecalculation, cityproject, stateproject, tmklookup, electricvehiclecharger, address, acceptedvalue)
+  select(buildingpermitno, contractor, contractorelectrical, contractorplumbing, issue_date, occupancygroupassessed, planmaker, proposeduse, statusdescription, tmk, bpfeescollected, ownershipassessed, structurecode, created_date, completed_date, commercialresidential, ohana, solar, bpfeecalculation, cityproject, stateproject, tmklookup, electricvehiclecharger, address, acceptedvalue, newbuilding, alteration, addition, electricalwork, plumbingwork, solar)
 ```
 
 Above, I revised the cleaned_dates_data to create a data set with only the columns (variables) I care about. This will help data analysis because it will unclutter the data. I won't have to skim through variables I don't particularly care about. 
@@ -119,6 +115,7 @@ Location: address, tmk
 Cost of project: acceptedvalue, estimatedvalueofwork
 Cost of fees: bpfeecalculation, bpfeescollected
 Type of property: commercialresidential, ownershipassessed, occupancygroupassessed, proposeduse, structurecode, cityproject, stateproject
+For Civil Beat analysis (see below for explanation): newbuilding, alteration, addition, electricalwork, plumbingwork, solar
 
 ```{r}
 #I am further narrowing down the data I want, and the order I want to see it in. 
@@ -130,7 +127,7 @@ cleaned_data %>%
   rename(building_permit_no = buildingpermitno, status = statusdescription, plan_maker = planmaker, electrical = contractorelectrical, plumbing = contractorplumbing, accepted_value = acceptedvalue, bp_fee_calculation = bpfeecalculation, bp_fee_collected = bpfeescollected, commpercial_residential = commercialresidential, ownership = ownershipassessed, occupancy_group = occupancygroupassessed, proposed_use = proposeduse, structure_code = structurecode, city = cityproject, state = stateproject)
          
 cleaned_data <- cleaned_data %>% 
-    rename(building_permit_no = buildingpermitno, status = statusdescription, plan_maker = planmaker, electrical = contractorelectrical, plumbing = contractorplumbing, accepted_value = acceptedvalue, bp_fee_calculation = bpfeecalculation, bp_fee_collected = bpfeescollected, commpercial_residential = commercialresidential, ownership = ownershipassessed, occupancy_group = occupancygroupassessed, proposed_use = proposeduse, structure_code = structurecode, city = cityproject, state = stateproject, est_value_of_work = estimatedvalueofwork)
+    rename(building_permit_no = buildingpermitno, status = statusdescription, plan_maker = planmaker, contractor_electrical = contractorelectrical, contractor_plumbing = contractorplumbing, accepted_value = acceptedvalue, bp_fee_calculation = bpfeecalculation, bp_fee_collected = bpfeescollected, commpercial_residential = commercialresidential, ownership = ownershipassessed, occupancy_group = occupancygroupassessed, proposed_use = proposeduse, structure_code = structurecode, city = cityproject, state = stateproject, est_value_of_work = estimatedvalueofwork)
 
 #I need to add estimatedvalueofwork
 ```
@@ -239,22 +236,401 @@ cleaned_data %>%
   arrange(desc(n))
   
 ```
-Moving forward, I would like to reverse engineer a data analysis done by Honolulu Civil Beat as a way to practice data analysis skills. The outlet got the same data, and did the following steps, which I will replicate: 
--narrow data to 2012 to 2022
+
+I would like to reverse engineer a data analysis done by Honolulu Civil Beat as a way to practice data analysis skills. The outlet got the same data, and did the following steps, which I will replicate: 
+- create civil_beat data set with only columns needed (DONE)
+-narrow data to 2012 to 2022 (DONE)
+- break up data into four categories for an apples-to-apples comparison of permit issuing times (DONE)
+  1) New building with electrical, plumbing and solar work
+  2) Alternation and addition with electrical and plumbing work 
+  3) Alteration with electrical and plumbing work 
+  4) Alternation with electrical work
+- Narrow to applicants who have had 10 or more permits issued (DONE)
+- calculate the difference between each permit application's "date created" with "date issued"  (DONE)
+
+Following these steps, I'll create a new data set for 2023 to 2025 to see if trends have continued. 
+
+After that, I will do further analysis to answer my own questions: 
+Are solar permits increasing over time?
+Which contractors are dominating city vs. state jobs?
+Do residential permits get issued faster than commercial ones?
+
+Replicating Civil Beat's Analysis: 
+1) add columns to "cleaned_data": "newbuilding," "electricalwork", "solar", "addition", "alternation", "plumbingwork"
+```{r}
+colnames(cleaned_data)
+#1) I need to add: "newbuilding," "electricalwork", "solar", "addition", "alternation", "plumbingwork" - those columns exist in original_data, but not in clean_data. rather than doing a left_join, I'll just go back in my code where I selected the columns I wanted from cleaned_dates_data to add into cleaned_data. 
+
+ncol(cleaned_data)
+#I went back up and added the columns, and now have 30 columns in my data. 
+colnames(cleaned_data)
+```
+
+I will keep "cleaned_data" for later analysis and create a new data set called "civil_beat" to create a data set with only the columns I need to re-create their analysis. Here are the variables (columns) I'll need: 
+"buildingpermitno" , “contractor" "issue_date"  , "occupancygroupassessed" , "planmaker"              "proposeduse" ,”statusdescription”, "bpfeescollected" "created_date" , "commercialresidential" ,”solar", "bpfeecalculation" ,”address" ,”acceptedvalue”,”newbuilding”,”alteration”,”addition","electricalwork" , "plumbingwork"
+```{r}
+civil_beat <- cleaned_data %>% 
+  select(buildingpermitno, contractor, issue_date, occupancygroupassessed, planmaker, proposeduse, statusdescription, bpfeescollected, created_date, commercialresidential, solar, bpfeecalculation, address, acceptedvalue, newbuilding, alteration, addition, electricalwork, plumbingwork)
+
+colnames(civil_beat)
+```
+
+I'll narrow the data down to 2012 to 2022
+```{r}
+civil_beat %>% 
+  mutate(year = year(created_date), .after = created_date) %>% 
+  select(year, created_date)
+
+civil_beat<-civil_beat %>% 
+  mutate(year = year(created_date), .after = created_date)
+
+civil_beat %>% 
+  filter(year > 2011) %>% 
+  range(year)
+
+civil_beat %>% 
+  filter(year > 2011) %>% 
+  distinct(year) %>% 
+  arrange(desc(year))
+
+civil_beat %>% 
+  filter(year > 2011 & year < 2023) %>% 
+  distinct(year) %>% 
+  arrange(desc(year))
+
+civil_beat %>% 
+  filter(year > 2011 & year < 2023) %>% 
+  count(year) %>% 
+  arrange(desc(year))
+
+range(civil_beat$created_date)
+
+civil_beat <- civil_beat %>% 
+  filter(year > 2011 & year < 2023)
+  
+```
+
+break up data into four categories for an apples-to-apples comparison of permit issuing times
+  1) New building with electrical, plumbing and solar work
+  2) Alternation and addition with electrical and plumbing work 
+  3) Alteration with electrical and plumbing work 
+  4) Alternation with electrical work
+  
+```{r}
+civil_beat %>% 
+  mutate(permit_category = case_when(
+         newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y"~ "NB_EPS",
+         alteration=="Y"& addition=="Y" & electricalwork=="Y" & plumbingwork == "Y" ~ "Alt_Add_EP", 
+         alteration=="Y" & plumbingwork=="Y" & electricalwork == "Y" ~ "Alt_EP",
+         alteration == "Y" & electricalwork == "Y" ~ "Alt_E", 
+         TRUE ~ NA_character_))
+
+civil_beat <- civil_beat %>%
+    mutate(permit_category = case_when(
+         newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y"~ "NB_EPS",
+         alteration=="Y"& addition=="Y" & electricalwork=="Y" & plumbingwork == "Y" ~ "Alt_Add_EP", 
+         alteration=="Y" & plumbingwork=="Y" & electricalwork == "Y" ~ "Alt_EP",
+         alteration == "Y" & electricalwork == "Y" ~ "Alt_E", 
+         TRUE ~ NA_character_))
+```
+
+The data now contain 235,934 rows. I don't want to look at projects that do not fit into my criteria, in other words, projects with "na" in my permit_category column. 
+```{r}
+civil_beat %>% 
+  filter(!is.na(permit_category))
+#that brought my number of rows down to 47,935. 
+
+civil_beat <- civil_beat %>% 
+  filter(!is.na(permit_category))
+```
+
+Now I need to narrow to applicants who have had 10 or more permits issued. Should I use "contractor" or "planmaker" for applicant? Let's compare these two rows. 
+
+```{r}
+civil_beat %>% 
+  select(planmaker, contractor)
+#There are nas in both columns, and a number of "nones" in the contractor column. How many nas are in the planner column and how many are in the contractor column? 
+
+civil_beat %>% 
+  filter(is.na(planmaker))
+#734 rows in the data have na for planmaker
+
+civil_beat %>% 
+  filter(is.na(contractor))
+#5,372 rows have na for contractor column. 
+```
+
+Now I need to narrow to applicants who have had 10 or more permits issued. I will use "planmaker" for applicant. I need to group_by planmaker and then filter for planmakers who have less than 10 rows. 
+```{r}
+civil_beat %>% 
+  group_by(planmaker) %>% 
+  arrange(desc(planmaker)) %>% 
+  select(planmaker)
+
+civil_beat %>% 
+  count(planmaker) %>% 
+  arrange(desc(n))
+
+ civil_beat %>% 
+   group_by(planmaker) %>% 
+   filter(n() >= 10)
+#I am now working with 28,807 rows of data
+ 
+ civil_beat %>% 
+   group_by(planmaker) %>% 
+   filter(n() >= 10) %>% 
+   summarise(num=n())
+
+civil_beat %>% 
+   group_by(planmaker) %>% 
+   filter(n() >= 10) %>% 
+   summarise(planmaker = n_distinct(planmaker)
+             
+civil_beat %>% 
+  group_by(planmaker) %>% 
+  filter(n() >= 10) %>% 
+  ungroup() %>% 
+  summarise(num_planmakers = n_distinct(planmaker))
+ 
+#there are 410 planmakers in our data -- people whose plans match our criteria and who have submitted more than 10 applications between 2012 and 2022. 
+
+civil_beat <- civil_beat %>% 
+  group_by(planmaker) %>% 
+  filter(n() >= 10)
+
+```
+
+My next step: calculate the difference between each permit application's "date created" with "date issued" . Here are the steps: create a new column (mutate) and within that column put the calculated number of days between "date created" and "date issued." In the same code chunk, after mutate, add a formula to subtract created_date from issued_date. This will be my first time calculating the number of days between two dates in R. 
+
+```{r}
+civil_beat %>% 
+  mutate(date_to_issue = issue_date - created_date)
+
+civil_beat <- civil_beat %>% 
+  mutate(date_to_issue = issue_date - created_date, .after = issue_date)
+
+civil_beat %>% 
+  filter(date_to_issue < 0)
+#no rows have negative values
+
+civil_beat %>% 
+  filter(date_to_issue == 0)
+
+# 43 permit applications were approved on the same day between 2012 and 2022. 
+
+#just out of curiosity, who got those permits? 
+civil_beat %>% 
+  filter(date_to_issue == 0) %>% 
+  count(planmaker) %>% 
+  arrange(desc(n))
+#"NONE" got 17 permits issued in a day. FISHY. Methode Maniraguha got 7 permits issued in just one day, and infamous Honolulu monster home builder Xiang Yee had 3 permits issued the same day
+
+civil_beat %>% 
+  filter(date_to_issue == 0) %>% 
+  count(planmaker, permit_category) %>% 
+  arrange(desc(n))
+```
+
+Find the average and median days to issue for each planmaker across all permit types from the categories you created. 
+```{r}
+civil_beat %>% 
+  summarise(median_days_to_issue = median(date_to_issue, na.rm = TRUE))%>% 
+  arrange((median_days_to_issue))
+
+group_vars(civil_beat)
+
+civil_beat %>% 
+  summarise(mean_days_to_issue = mean(date_to_issue, na.rm = TRUE))%>% 
+  arrange(mean_days_to_issue)
+
+```
+
+
+Find the average and median days to issue across all permit types from the categories you created. 
+```{r}
+civil_beat %>% 
+  ungroup() %>% 
+  summarise(median_days_to_issue = median(date_to_issue, na.rm = TRUE))
+
+#Median days to issue is 125 days across all project types
+group_vars(civil_beat)
+
+civil_beat %>% 
+    ungroup() %>% 
+  summarise(mean_days_to_issue = mean(date_to_issue, na.rm = TRUE))
+#average (mean) days to issue is 210 days	across all project types 
+```
+Next: find mean and median for each permit_category. (filter for each permit category and find the mean and median)
+Check outliers to see people who have gotten their permits approved in far shorter time. 
+Permit categories: 
+  1) NB_EPS = New building with electrical, plumbing and solar work
+  2) Alt_Add_EP = Alternation and addition with electrical and plumbing work 
+  3) Alt_EP = Alteration with electrical and plumbing work 
+  4) Alt_E = Alternation with electrical work
+  
+  What is the mean and median time to issue a permit for NB_EPS permits? 
+```{r}
+civil_beat %>% 
+  group_by(permit_category) %>% 
+  summarise(median_time = median(date_to_issue))
+
+civil_beat %>% 
+  filter(!is.na(date_to_issue)) %>% 
+  group_by(permit_category) %>% 
+  summarise(median_time = median(date_to_issue))
+
+#Civil Beat's analysis used averages, not mean 
+
+civil_beat %>% 
+  filter(!is.na(date_to_issue)) %>% 
+  group_by(permit_category) %>% 
+  summarise(average = mean(date_to_issue))
+```
+For Alt_Add_EP, Civil Beat's average is 135 days. My average is 199 days. 
+For Alt_E, Civil Beat's average is 127 days. My average is 220 days.
+For Alt_EP, Civil Beat's average is 135 days. My average is 193 days.
+For NB_EPS, Civil Beat's average is 265 days. My average is 227 days.
+
+I'm going to go back and look through my code for potential errors. What steps did I take? 
+- create civil_beat data set with only columns needed
+        Checked: I added the necessary columns to create civil_beat
+-narrow data to 2012 to 2022 
+     Checked: I used range(civil_beat$created_date) to figure out the dates. I got: [1] "2012-01-03" "2022-12-31"
+      
 - break up data into four categories for an apples-to-apples comparison of permit issuing times
   1) New building with electrical, plumbing and solar work
   2) Alternation and addition with electrical and plumbing work 
   3) Alteration with electrical and plumbing work 
   4) Alternation with electrical work
-- Narrow to applicants who have had 10 or more permits issued
-- calculate the difference between each permit application's "date created" with "date issued" 
-- 
+Here's the code I used to created the four categories: 
+civil_beat %>% 
+  mutate(permit_category = case_when(
+         newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y"~ "NB_EPS",
+         alteration=="Y"& addition=="Y" & electricalwork=="Y" & plumbingwork == "Y" ~ "Alt_Add_EP", 
+         alteration=="Y" & plumbingwork=="Y" & electricalwork == "Y" ~ "Alt_EP",
+         alteration == "Y" & electricalwork == "Y" ~ "Alt_E", 
+         TRUE ~ NA_character_))
+Here's what I think could have gone wrong. In creating the group "Alteration with electrical work," for example, I didn't put in provisions to say the group should have "N" for thinkgs like Solar, or Addition, or Plumbing. So is it possible that some of the permit applications in my "Alternation with electrical work" are ALSO projects that have plumbing work becuase I didn't specify that those projects should NOT have plumbing? 
+      CHECKED: This was, indeed, the problem. 
 
-Following these steps, I'll create a new data set for 2023 to 2025 to see if trends have continued. 
+One way to check this is to see: How many permits are in each group and how many are there total in all four groups. If the sum of the parts is more than the whole, I have some overlap. 
+
+```{r}
+civil_beat %>% 
+  group_by(permit_category) %>%
+    summarise(total_permit = n())
+
+civil_beat %>% 
+  group_by(permit_category) %>%
+    summarise(total_permit = n()) %>% 
+  mutate(total = sum(total_permit))
+
+#Oops. Another lapse in my thinking. Of course the total is 28,807 -- I'm just adding up the totals. Here's what I've learned: (case_when) only allows one permit_category per row. According to ChatGPT: "R assigns the category from the first condition that matches, and then stops checking the others." Here's my confusion: So does that mean that if there's a permit that has alternation with electrical work, it could have ended up in "alteration with electrcial and plumbing?" If that's case, why are there ANY rows accounted for in my alteration with electrical work category? Wouldn't all those have been accounted for in my alteration with electrical work and plumbing category, which preceded the alternation with electrical work in my code? 
+
+#permit_category total_permit  total
+#Alt_Add_EP	      9458	     28807		
+#Alt_E	          4749	    28807		
+#Alt_EP	          5323    	28807		
+#NB_EPS	          9277	    28807	
+
+```
+Check for NB_EPS 
+```{r}
+civil_beat %>% 
+  filter(newbuilding == "Y", electricalwork == "Y", plumbingwork == "Y", solar == "Y") %>% 
+  nrow()
+#I get 9,277
+
+civil_beat %>%
+  filter(newbuilding == "Y", electricalwork == "Y", plumbingwork == "Y", solar == "Y",
+         alteration == "N", addition == "N") %>%
+  nrow()
+#I get 9231
+
+#46  rows were new buildings with solar, electrical and plumbing and also either alteration or addition. We don't know if Civil Beat excluded alterations and additions in their categorizing of new buildings with solar, plumbing and electrical work. 
+```
+Alt_Add_EP. I got 9458 earlier. 
+```{r}
+civil_beat %>%
+  filter(alteration == "Y", addition == "Y", electricalwork == "Y", plumbingwork == "Y") %>%
+  nrow()
+#the answer I get is 9470
+
+civil_beat %>%
+  filter(
+    alteration == "Y",
+    addition == "Y",
+    electricalwork == "Y",
+    plumbingwork == "Y",
+    newbuilding == "N",
+    solar == "N"
+  ) %>%
+  nrow()
+
+#the answer I get is 9101
+```
+
+```{r}
+civil_beat <- civil_beat %>% 
+  mutate(permit_category = case_when(
+         newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y" & alteration == "N" & addition == "N"~ "NB_EPS",
+         alteration=="Y"& addition=="Y" & electricalwork=="Y" & plumbingwork == "Y" & solar == "N" & newbuilding == "N" ~ "Alt_Add_EP", 
+         alteration=="Y" & plumbingwork=="Y" & electricalwork == "Y" & addition == "N" & solar == "N" & newbuilding == "N" ~ "Alt_EP",
+         alteration == "Y" & electricalwork == "Y" & plumbingwork == "N" & addition == "N" & solar == "N" & newbuilding == "N" ~ "Alt_E", 
+         TRUE ~ NA_character_))
+```
+
+Next I will check that I: 
+- Narrow to applicants who have had 10 or more permits issued 
+```{r}
+ civil_beat %>% 
+   group_by(planmaker) %>% 
+   filter(n() < 10)
+#no planmakers in my data submitted less than 10 permits
+
+ civil_beat %>% 
+   group_by(planmaker) %>% 
+   filter(n() == 10)
+ #34 planmakers submitted 10 applications
+ 
+ civil_beat %>% 
+   group_by(planmaker) %>% 
+   filter(n() > 10)
+ #376 planmakers submitted more than 10 -- that makes my 410 total plan makers who submitted 10 or more permits. 
+ 
+```
+
+Calculate the difference between each permit application's "date created" with "date issued". Here are some places this could have gone wrong: did Civil Beat include the date when the permit was created and issued, meaning is it inclusive? My guess is it was. 
+```{r}
+civil_beat %>% 
+  ungroup() %>% 
+  select(buildingpermitno, created_date , issue_date, date_to_issue)
+
+civil_beat %>% 
+  select(buildingpermitno, created_date , issue_date, date_to_issue)
+```
+
+Then re-calculate the mean for the 2012 - 2022 time frame. 
+```{r}
+civil_beat %>% 
+  group_by(permit_category) %>% 
+  summarise(mean = mean(date_to_issue, na.rm = TRUE))
+
+civil_beat %>% 
+  filter(!is.na(permit_category)) %>% 
+  group_by(permit_category) %>% 
+  summarise(average = mean(date_to_issue, na.rm = TRUE))
+```
+For Alt_Add_EP, Civil Beat's average is 135 days. My average was 199 days. My new average is 195 days. 
+For Alt_E, Civil Beat's average is 127 days. My average was 220 days. My new average is 240 days. 
+For Alt_EP, Civil Beat's average is 135 days. My average is 193 days. My new average is 192 days. 
+For NB_EPS, Civil Beat's average is 265 days. My average is 227 days. My new average is 227 days. 
+
+Ok, my hypothesis that not adding things like plumbingwork == "N" for the Alt_E category, for example, did not appear to be correct. Even with those new category stipulations when doing case_when, I still did not get what Civil Beat got, and in fact doing that did not change my averages very much. 
 
 
 
-
+My own interest: Annual average and median days to usse
 ***as a rule of thumb, use `group_by()` and `summarise()` together, or `count()` if what you want to summarise is just number of rows**
 data_2 %>% 
   group_by(ExtNatureDisplayName) %>% 
@@ -265,8 +641,7 @@ data_2 %>%
   count(ExtNatureDisplayName) %>% 
   arrange(desc(n))
 
-Questions: 
-Check the number of days between the created date and issued date. Create a new column with the number of days it took between the created date and issued date, if there is a way in R to determine that (assuming R has some sort of built-in calendar)? 
+Possible Questions: 
 Median time for permitting residential and commerical projects? 
 What's the best day of the week to file a permit? 
 For every year, what's the median time it takes to issue a Honolulu permit? 
