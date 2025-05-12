@@ -593,7 +593,6 @@ Next I will check that I:
    filter(n() == 10)
  #34 planmakers submitted 10 applications
  
- civil_beat %>% 
    group_by(planmaker) %>% 
    filter(n() > 10)
  #376 planmakers submitted more than 10 -- that makes my 410 total plan makers who submitted 10 or more permits. 
@@ -628,9 +627,10 @@ For NB_EPS, Civil Beat's average is 265 days. My average is 227 days. My new ave
 
 Ok, my hypothesis that not adding things like plumbingwork == "N" for the Alt_E category, for example, did not appear to be correct. Even with those new category stipulations when doing case_when, I still did not get what Civil Beat got, and in fact doing that did not change my averages very much. 
 
+That was a messy and depressing process. I'm going to redo that process in another workbook and call it "Clean CB Replication." I would not want to show this workbook to anyone because it's messy, so I want to create a new notebook and redo my code using the lessons I've learned from this initial trial period. 
 
 
-My own interest: Annual average and median days to usse
+Note: 
 ***as a rule of thumb, use `group_by()` and `summarise()` together, or `count()` if what you want to summarise is just number of rows**
 data_2 %>% 
   group_by(ExtNatureDisplayName) %>% 

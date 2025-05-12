@@ -1,0 +1,450 @@
+---
+title: "Clean CB Replication"
+output: 
+---
+Necessary packages: 
+```{r}
+library(tidyverse)
+
+```
+
+Building permit data from data.honolulu.gov 
+```{r}
+data_2 <- read_csv("data/Building_Permits_-_January_1__2005_through_March_31__2025_20250418 (1).csv")
+```
+Clean data
+Fix dates. in createddate and issuedate. Dates currently in this format: 05/09/2023
+```{r}
+data_2 %>% 
+  mutate(created_date = mdy(createddate)) %>% 
+  select(created_date, createddate)
+
+#make it permanent
+
+data_2 <- data_2 %>% 
+  mutate(created_date = mdy(createddate), .after = createddate)
+
+#change dates for issuedate
+data_2 %>% 
+  mutate(issue_date = mdy(issuedate)) %>% 
+  select(issue_date, issuedate)
+
+#make it permanent 
+data_2 <- data_2 %>% 
+  mutate(issue_date = mdy(issuedate), .after = issue_date)
+```
+
+Get rid of dates prior to 2012 and after 2022.
+
+```{r}
+data_2 %>% 
+  filter(created_date > 2012 & created_date < 2023) %>% 
+  range(data_2$created_date)
+
+#that did not work
+
+data_2 %>% 
+  filter(created_date >= as_date ("2012-01-01") & created_date <= as_date("2022-12-31")) %>%
+  select(created_date) %>% 
+  arrange(created_date)
+#checking that the first date is Jan. 1, 2012
+
+data_2 %>% 
+  filter(created_date >= as_date ("2012-01-01") & created_date <= as_date("2022-12-31")) %>%
+  select(created_date) %>% 
+  arrange(desc(created_date))
+
+#checking that the last date is December 31, 2022. 
+
+#make it permanent 
+
+data_2 <- data_2 %>% 
+  filter(created_date >= as_date ("2012-01-01") & created_date <= as_date("2022-12-31"))
+#I now have 235,944 rows in my data
+        
+```
+
+Break data up into four categories representing some fo the most common types of project: 
+1) New building with electrical, plumbing and solar 
+2) Alteration with addition with electrical and plumbing work
+3) Alteration with electrical and plumbing
+4) Alteration with electrical work 
+
+```{r}
+#viewing column names
+glimpse(data_2)
+# relevant column names: 
+#addition == ""
+#alteration == ""
+#plumbingwork == ""
+#electricalwork == ""
+#newbuilding == ""
+
+#unclear if Civil Beat used the column "solarvpinstallation" or the column "solar". We know from earlier analyses these two columns are not always the same. 
+```
+
+Create new column called "permit_type" and categorize data with new labels. 
+1) New building with electrical, plumbing and solar "NB_EPS" 
+NB_EPS ~ newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & "solar" == "Y" & addition == "N" & alteration == "N",
+
+2) Alteration with addition with electrical and plumbing work
+Alt_Add_EP ~ newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & "solar" == "N" & addition == "Y" & alteration == "Y", 
+
+3) Alteration with electrical and plumbing
+Alt_EP ~ newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & "solar" == "N" & addition == "N" & alteration == "Y",
+
+4) Alteration with electrical work 
+Alt_E ~ newbuilding == "N" & electricalwork == "Y" & plumbingwork == "N" & "solar" == "N" & addition == "N" & alteration == "Y",
+
+```{r}
+data_2 %>% 
+  mutate(permit_type = case_when(
+   newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y" & addition == "N" & alteration == "N" ~ "NB_EPS",
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & solar == "N" & addition == "Y" & alteration == "Y" ~ "Alt_Add_EP", 
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & solar == "N" & addition == "N" & alteration == "Y" ~ "Alt_EP",
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "N" & solar == "N" & addition == "N" & alteration == "Y" ~ "Alt_E",
+   .default = "Unknown"))
+#I used .default = "Unknown" instead of TRUE ~ NA_character_ because we used .default = "Unknown" in class and TRUE ~ NA_character_ is ChatGPT's recommendation -- I don't trust chatGPT. 
+
+data_2 %>% 
+  mutate(permit_type = case_when(
+   newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y" & addition == "N" & alteration == "N" ~ "NB_EPS",
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & solar == "N" & addition == "Y" & alteration == "Y" ~ "Alt_Add_EP", 
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & solar == "N" & addition == "N" & alteration == "Y" ~ "Alt_EP",
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "N" & solar == "N" & addition == "N" & alteration == "Y" ~ "Alt_E",
+   .default = "Unknown")) %>% 
+  select(permit_type)
+
+#make it permanent
+
+data_2 <- data_2 %>% 
+  mutate(permit_type = case_when(
+   newbuilding == "Y" & electricalwork == "Y" & plumbingwork == "Y" & solar == "Y" & addition == "N" & alteration == "N" ~ "NB_EPS",
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & solar == "N" & addition == "Y" & alteration == "Y" ~ "Alt_Add_EP", 
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "Y" & solar == "N" & addition == "N" & alteration == "Y" ~ "Alt_EP",
+   newbuilding == "N" & electricalwork == "Y" & plumbingwork == "N" & solar == "N" & addition == "N" & alteration == "Y" ~ "Alt_E",
+   .default = "Unknown"))
+
+```
+
+narrow to applicants who have had 10 or more permits issued. 
+```{r}
+#how many rows are in the data? 
+data_2 %>% count()
+#there are 235934 rows in the data
+
+data_2 %>% 
+  count(planmaker) %>% 
+  arrange(desc(n))
+# 123682 applications have "NONE" under "planmaker" and "7077" applications have NA. That's 130,759 out of 235934. That's more than half of the applications, or 55.42%. 
+
+#filter for only applicants with 10 or more applications
+data_2 %>% 
+  group_by(planmaker) %>% 
+  filter(n() >= 10) %>% 
+  count(planmaker) %>% 
+  arrange(desc(n))
+
+#make it permanent
+
+data_2 <- data_2 %>% 
+  group_by(planmaker) %>% 
+  filter(n() >= 10)
+
+```
+
+Calculate the difference between each applicant's "created_date" and "issued_date." It's not clear if Civil Beat used "issued_date" or "completeddate" in their analysis. I am assuming "completeddate" is the date the actual construction was complete, not the data when the permit was issued. 
+
+```{r}
+data_2 %>% 
+  mutate(days_to_issue = issue_date - created_date, .after = created_date) %>% 
+  select(created_date, issue_date, days_to_issue)
+
+#make it permanent
+data_2 <- data_2 %>% 
+  mutate(days_to_issue = issue_date - created_date, .after = created_date)
+```
+
+How many planmakers are in my data? 
+```{r}
+```{r}
+data_2 %>% 
+  count(planmaker)
+#There are 848 unique planmakers in our data
+
+```{r}
+data_2 %>% 
+  count(planmaker) %>% 
+  arrange(desc(n))
+
+#It's not clear how Civil Beat handled the NONE or NA data. I will find averages for the numbers with NONE and NA in "planamker" and averages for the data with those permit applications filtered. 
+#There are 	123682	applications for which planmaker is NONE
+#There are 7077 applications for which planmaker is NA
+#That is 130,759 permit applications for which the planmaker is NONE or NA
+```
+
+How many permit applications (rows) are in our data?  
+```{r}
+data_2 %>% 
+  ungroup() %>% 
+  summarise(total_rows = n())
+
+#There are 183805 total permit applications in my data. 
+
+#How many are there without NA or NONE in the Planmaker?
+
+data_2 %>% 
+  ungroup() %>% 
+  filter(is.na(planmaker) | grepl("NONE", planmaker, ignore.case=T)) %>% 
+  summarise(total_rows = n())
+#There are 130759 total permit applications in my data without NA and NONE
+```
+What is the average days to issue a permit for all our data? 
+
+```{r}
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue)) %>% 
+  summarise(average_total_data = mean(days_to_issue))
+
+#58.5 The average days to issue a permit was 59 days, or about two months. 
+```
+
+
+For each category, how many permit applications were filed? How many planmakers are there? What is the average amount of time it takes to get a permit issued? Make a list of the top 30 planmakers with the lowest average days_to_permit time. Give the average time for each, and the number of permit application each planmaker submitted. 
+
+#1) New building with electrical, plumbing and solar (NB_EPS)
+
+```{r}
+#How many permit applications were filed? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(permit_type == "NB_EPS") %>% 
+   summarise(total_rows = n())
+#9,296 rows belong to NB_EPS category of permit
+
+#How many planmakers are there? 
+data_2 %>% 
+  filter(permit_type == "NB_EPS") %>% 
+  ungroup() %>% 
+  summarise(num_planmakers = n_distinct(planmaker))
+#There are 230 planmakers in this group
+
+#What is the average amount of time it takes to get a permit of this type issued? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "NB_EPS") %>% 
+  summarise(average = mean(days_to_issue))
+
+#For a new building with electrical work, plumbing and solar, it took 227 days on average to issue a permit. Civil Beat's average is 265 days.
+
+#Let's try get rid of NA and NONE 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "NB_EPS", is.na(planmaker) | grepl("NONE", planmaker, ignore.case=T)) %>% 
+  summarise(average = mean(days_to_issue))
+#I now get 188.5417 days. That's even further from Civil Beat's average. 
+```
+
+Find the averages in each category 
+1) New building with electrical, plumbing and solar (NB_EPS)
+```{r}
+#Make a list of the top 30 planmakers with the lowest average days_to_permit time. Give the average time for each, and the number of permit application each planmaker submitted. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "NB_EPS") %>% 
+  group_by(planmaker) %>% 
+  summarise(average_days = mean(days_to_issue), applications_submitted = n()) %>% 
+  select(planmaker, average_days, applications_submitted) %>% 
+  arrange(desc(average_days))
+
+#MICHAEL J KUJUBU submitted 119 permit applications and they took, on average, 1,592 days to get approved. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "NB_EPS") %>% 
+  group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()) %>% 
+  select(planmaker, average_days, applications_submitted) %>% 
+  arrange(average_days) %>% 
+  slice_head(n = 30)
+
+#DARREN Y T LEE submitted two NB_EPS permits and had them approved in 4.5 days, on average. Note that I filtered earlier so the data contains only planmakers who submitted 10 or more permits. The other 8 permits DARREN Y T LEE submitted must have not fit the NB_EPS. Here's another thing I realize now that I don't know about Civil Beat's data: Did they filter for people who submitted 10 or more permits overall, or within each group of permit_type? I suspect the former because of they way they explain they data process, but this could be another reason our data results don't match.
+
+#Let's try filter again for only applicants within the NB_EPS pool who sumbitted 10 or more NB_EPS applications. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "NB_EPS") %>% 
+  group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()
+  ) %>% 
+  filter(applications_submitted >= 10) %>% 
+  arrange(average_days) %>% 
+  slice_head(n = 30)
+
+#I am still not getting the same results as Civil Beat. The first applicant on their list was Makaha Oceanview Estates et al. Is that company in our list? 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "NB_EPS") %>% 
+  group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()
+  ) %>% 
+  filter(applications_submitted >= 10) %>% 
+  arrange(planmaker)
+#Makaha Oceanview Estates LLC et al. is not on our list at all. Let's get rid of NA and NONE for planmaker. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), 
+         permit_type == "NB_EPS",  
+         !is.na(planmaker), 
+         !grepl("NONE", planmaker, ignore.case=T)) %>% 
+ group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()
+  ) %>% 
+  filter(applications_submitted >= 10) %>% 
+  arrange(average_days) 
+
+
+```
+
+2) Alteration with addition with electrical and plumbing work -- Alt_Add_EP
+```{r}
+
+data_2 %>% 
+  ungroup() %>% 
+  distinct(permit_type)
+
+#How many permit applications were filed? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(permit_type == "Alt_Add_EP") %>% 
+   summarise(total_rows = n())
+#9,250 rows belong to Alt_Add_EP category of permit
+
+#How many planmakers are there? 
+data_2 %>% 
+  filter(permit_type == "Alt_Add_EP") %>% 
+  ungroup() %>% 
+  summarise(num_planmakers = n_distinct(planmaker))
+#There are 308 planmakers in this group
+
+#What is the average amount of time it takes to get a permit of this type issued? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_Add_EP") %>% 
+  summarise(average = mean(days_to_issue))
+
+#For a new building with electrical work, plumbing and solar, it took 196 days on average to issue a permit. Civil Beat's average is 135 days.
+
+#Get rid of NA and NONE 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_Add_EP", is.na(planmaker) | grepl("NONE", planmaker, ignore.case=T)) %>% 
+  summarise(average = mean(days_to_issue))
+#The average time to issue a permit in the Alt_Add_EP permit type is 196 days. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_Add_EP") %>% 
+  group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()) %>% 
+  select(planmaker, average_days, applications_submitted) %>% 
+  arrange(average_days) %>% 
+  slice_head(n = 30)
+```
+
+3) Alteration with electrical and plumbing - Alt_EP
+```{r}
+#How many permit applications were filed? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(permit_type == "Alt_EP") %>% 
+   summarise(total_rows = n())
+#5,519 rows belong to Alt_EP category of permit
+
+#How many planmakers are there? 
+data_2 %>% 
+  filter(permit_type == "Alt_EP") %>% 
+  ungroup() %>% 
+  summarise(num_planmakers = n_distinct(planmaker))
+#There are 508 planmakers in this group
+
+#What is the average amount of time it takes to get a permit of this type issued? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_EP") %>% 
+  summarise(average = mean(days_to_issue))
+
+#For a new building with electrical work, plumbing and solar, it took 195 days on average to issue a permit. Civil Beat's average is 135 days -- the same as it was for Alt_Add_EP 
+
+#Get rid of NA and NONE 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_EP", is.na(planmaker) | grepl("NONE", planmaker, ignore.case=T)) %>% 
+  summarise(average = mean(days_to_issue))
+#The average time to issue a permit in the Alt_Add_EP permit type is 124 days. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_EP") %>% 
+  group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()) %>% 
+  select(planmaker, average_days, applications_submitted) %>% 
+  arrange(average_days) %>% 
+  slice_head(n = 30)
+```
+
+
+4) Alteration with electrical work - Alt_E
+
+```{r}
+#How many permit applications were filed? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(permit_type == "Alt_E") %>% 
+   summarise(total_rows = n())
+#3,522 rows belong to Alt_E category of permit
+
+#How many planmakers are there? 
+data_2 %>% 
+  filter(permit_type == "Alt_E") %>% 
+  ungroup() %>% 
+  summarise(num_planmakers = n_distinct(planmaker))
+#There are 481 planmakers in this group
+
+#What is the average amount of time it takes to get a permit of this type issued? 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_E") %>% 
+  summarise(average = mean(days_to_issue))
+
+#For a new building with electrical work, plumbing and solar, it took 244 days on average to issue a permit. Civil Beat's average is 127 days
+
+#Get rid of NA and NONE 
+data_2 %>% 
+  ungroup() %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_E", is.na(planmaker) | grepl("NONE", planmaker, ignore.case=T)) %>% 
+  summarise(average = mean(days_to_issue))
+#The average time to issue a permit in the Alt_EP permit type is 99 days. 
+
+data_2 %>% 
+  filter(!is.na(days_to_issue), permit_type == "Alt_EP") %>% 
+  group_by(planmaker) %>% 
+  summarise(
+    average_days = mean(days_to_issue),
+    applications_submitted = n()) %>% 
+  select(planmaker, average_days, applications_submitted) %>% 
+  arrange(average_days) %>% 
+  slice_head(n = 30)
+```
+
+My attempts at recreating Civil Beat's data have thus far been unsuccessful.  
